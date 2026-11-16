@@ -1,18 +1,16 @@
-package com.holub.life;
+package com.holub.life.control;
 
-import java.awt.*;
-import java.awt.event.*;
 import javax.swing.*;
-import java.util.*;
-import java.util.Timer;		// overrides java.awt.timer
-import com.holub.ui.MenuSite;
 import com.holub.tools.Publisher;
 
 /***
  * The <code>Clock</code> class handles the timing of gameboard
- * updates. It creates its own menu (which sets the clock speed),
- * and sends notifications off to any observers every time the
- * clock "ticks."
+ * updates and sends notifications off to any observers every time the
+ * clock "ticks." Its speed menu is installed by {@link ClockMenu}.
+ *
+ * <p>Ticks are delivered on the Swing event-dispatch thread
+ * (javax.swing.Timer), the same thread that handles clicks and
+ * painting, so the board needs no locking.
  *
  * <h2>Revisions</h2>
  * <p>
@@ -27,27 +25,10 @@ import com.holub.tools.Publisher;
  */
 
 public class Clock
-{	private Timer			clock		= new Timer();
-	private TimerTask		tick		= null;
+{	private final Timer clock = new Timer( 0, e -> tick() );
 
-	// The clock can't be an everything-is-static singleton because
-	// it creates a menu, and it can't do that until the menus
-	// are established.
-	//
-	private Clock()
-	{	createMenus();
-	}
-
-	private static Clock instance;
-
-	/** The clock is a singleton. Get a reference to it by calling
-	 *  <code>Clock.instance()</code>. It's illegal to call
-	 *  <code>new Clock()</code>.
-	 */
-	public synchronized static Clock instance()
-	{	if( instance == null )
-			instance = new Clock();
-		return instance;
+	public Clock()
+	{	clock.setCoalesce( true );		// drop ticks we can't keep up with
 	}
 
 	/** Start up the clock.
@@ -57,16 +38,12 @@ public class Clock
 	 */
 
 	public void startTicking( int millisecondsBetweenTicks )
-	{	if(tick != null)
-		{	tick.cancel();
-			tick=null;
-		}
+	{	clock.stop();
 
 		if( millisecondsBetweenTicks > 0 )
-		{	tick =	new TimerTask()
-					{	public void run(){ tick(); }
-					};
-			clock.scheduleAtFixedRate( tick, 0, millisecondsBetweenTicks);
+		{	clock.setInitialDelay( 0 );
+			clock.setDelay( millisecondsBetweenTicks );
+			clock.start();
 		}
 	}
 
@@ -77,44 +54,11 @@ public class Clock
 	{	startTicking( 0 );
 	}
 
-	/** Create the menu that controls the clock speed and
-	 *  put it onto the menu site. 
-	 */
-	private void createMenus()
-	{
-		// First set up a single listener that will handle all the
-		// menu-selection events except "Exit"
-
-		ActionListener modifier =									//{=startSetup}
-			new ActionListener()
-			{	public void actionPerformed(ActionEvent e)
-				{
-					String name = ((JMenuItem)e.getSource()).getName();
-					char toDo = name.charAt(0);
-
-					if( toDo=='T' )
-						tick();				      // single tick
-					else
-						startTicking(   toDo=='A' ? 500:	  // agonizing
-										toDo=='S' ? 150:	  // slow
-										toDo=='M' ? 70 :	  // medium
-										toDo=='F' ? 30 : 0 ); // fast
-				}
-			};
-																	// {=midSetup}
-		MenuSite.addLine(this,"Go","Halt",  			modifier);
-		MenuSite.addLine(this,"Go","Tick (Single Step)",modifier);
-		MenuSite.addLine(this,"Go","Agonizing",	 	  	modifier);
-		MenuSite.addLine(this,"Go","Slow",		 		modifier);
-		MenuSite.addLine(this,"Go","Medium",	 	 	modifier);
-		MenuSite.addLine(this,"Go","Fast",				modifier); // {=endSetup}
-	}	//{=endCreateMenus}
-
 	private Publisher publisher = new Publisher();
 
 	/** Add a listener that's notified every time the clock ticks:
 	 *  <PRE>
-	 *  Clock.instance().addClockListener
+	 *  clock.addClockListener
 	 *  (	new Clock.Listener()
 	 *  	{	public void tick()
 	 *  		{	System.out.println("tick!");

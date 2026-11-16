@@ -1,17 +1,21 @@
-# Compiled
-*.class
+# Build output
 out/
-bin/
-build/
-target/
 
-# IDE
+# Produced by scripts/test.sh and scripts/gui-check.sh
+test-output/
+bin/
+*.class
+
+# IDE settings
 .idea/
 *.iml
 .vscode/
-.classpath
 .project
+.classpath
 .settings/
 
-# OS
+# macOS
 .DS_Store
+
+# Downloaded test libraries (test.sh fetches them)
+lib/

@@ -57,6 +57,12 @@ public class GuiSmokeCheck
 		chooseFileThen(saved, () -> menu("Grid", "Load"));
 		expect("Load로 저장한 보드가 돌아온다", "after-load", Set.of("10,9", "10,10", "10,11"));
 
+		// B regression: cancelling either action leaves the current board intact.
+		Set<String> beforeCancel = live();
+		chooseFileThen(null, () -> menu("Grid", "Load"));
+		check("Load 취소 후 보드가 유지된다", live().equals(beforeCancel));
+		chooseFileThen(null, () -> menu("Grid", "Store"));
+		check("Store 취소 후 보드가 유지된다", live().equals(beforeCancel));
 		// 5. A file in the original format: LinkedList<Point>, each cell twice
 		File legacy = new File(DIR, "legacy.life");
 		LinkedList<Point> cells = new LinkedList<>();
@@ -80,12 +86,14 @@ public class GuiSmokeCheck
 		File junk = new File(DIR, "junk.life");
 		try (FileWriter w = new FileWriter(junk)) { w.write("not a life file"); }
 		AtomicBoolean errorShown = new AtomicBoolean();
+		AtomicBoolean errorOwnedByFrame = new AtomicBoolean();
 		Thread closer = new Thread(() -> {
 			for (int i = 0; i < 100; ++i)
 			{   try { Thread.sleep(100); } catch (InterruptedException e) { return; }
 				for (Window w : Window.getWindows())
 					if (w instanceof JDialog d && d.isShowing() && find(d, "JOptionPane") != null)
 					{   errorShown.set(true);
+						errorOwnedByFrame.set(SwingUtilities.getWindowAncestor(d.getOwner()) == frame || d.getOwner() == frame);
 						SwingUtilities.invokeLater(d::dispose);
 						return;
 					}
@@ -96,6 +104,7 @@ public class GuiSmokeCheck
 		closer.join();
 		check("잘못된 파일은 오류 대화상자를 띄운다", errorShown.get());
 		check("잘못된 파일을 불러와도 보드는 그대로다", live().equals(moved));
+		check("파일 오류 대화상자는 앱 창에 연결된다", errorOwnedByFrame.get());
 
 		System.out.println(failures == 0 ? "GUI 점검 모두 통과" : "GUI 점검 실패 " + failures + "건");
 		System.exit(failures == 0 ? 0 : 1);
@@ -160,7 +169,15 @@ public class GuiSmokeCheck
 					if (w.isShowing() && w instanceof JDialog d)
 					{   JComponent chooser = find(d.getContentPane(), "JFileChooser");
 						if (chooser instanceof JFileChooser fc)
-						{   SwingUtilities.invokeLater(() -> { fc.setSelectedFile(file); fc.approveSelection(); });
+						{   SwingUtilities.invokeLater(() -> {
+								if (file == null)
+									fc.cancelSelection();
+								else
+								{
+									fc.setSelectedFile(file);
+									fc.approveSelection();
+								}
+							});
 							return;
 						}
 					}

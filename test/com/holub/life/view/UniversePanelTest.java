@@ -8,12 +8,15 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.extension.ExtendWith;
 import com.holub.life.model.*;
 
 /** 화면(UniversePanel)도 창을 띄우지 않고 시험한다. 패널을 이미지에
  *  그린 뒤 각 셀 가운데 픽셀 색으로 산 셀을 읽는다(빨강 = 살아 있음).
+ *  실제 프로그램처럼 모든 테스트를 EDT에서 실행한다(패널은 EDT 밖의 알림을 거부함).
  */
 @DisplayName("화면 UniversePanel (창 없이 이미지로 검사)")
+@ExtendWith(OnEventDispatchThread.class)
 class UniversePanelTest
 {
 	private static final int CELL = 8;

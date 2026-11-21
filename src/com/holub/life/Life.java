@@ -10,6 +10,7 @@ import com.holub.life.storage.format.JavaSerializationFormat;
 import com.holub.life.control.BoardFileActions;
 import com.holub.life.control.Clock;
 import com.holub.life.control.ClockMenu;
+import com.holub.life.view.ColoringMenu;
 import com.holub.life.view.ReadOnlyBoardView;
 import com.holub.life.view.ScreenFit;
 import com.holub.life.view.UniversePanel;
@@ -67,6 +68,7 @@ public final class Life extends JFrame
 		BoardFileActions fileActions = new BoardFileActions( this, model, files, clock );
 		installGridMenu( menus, model, fileActions );
 		ClockMenu.install( menus, clock );
+		ColoringMenu.install( menus, panel );
 		menus.addLine( this, "Race", "Glider Race...", e -> showRace() );
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );

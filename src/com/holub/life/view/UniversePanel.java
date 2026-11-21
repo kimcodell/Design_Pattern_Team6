@@ -30,6 +30,15 @@ import com.holub.life.model.*;
  *  programming error and throws {@link IllegalStateException} at once,
  *  instead of corrupting the picture now and then.
  *
+ *  <p><b>Colors.</b> How cells are colored is a {@link CellColoring}
+ *  (Strategy), the original red by default ({@link ClassicColoring}). The
+ *  panel keeps track of how long each live cell has been alive
+ *  ({@link CellAges}) whatever the coloring, so switching to a coloring
+ *  that depends on age ({@link AgeColoring}) shows the real ages at once.
+ *  When a cell reaches an age at which its color changes, it is redrawn
+ *  like a changed cell, but its block does not get a blue border: nothing
+ *  was computed there.
+ *
  *  <p>Give the panel a read-only board ({@link ReadOnlyBoardView#of}): the
  *  panel only reads it, and clicks go out through
  *  {@link #setCellClickListener}.
@@ -43,8 +52,6 @@ public class UniversePanel extends JPanel implements BoardListener
 	}
 
 	private static final Color BORDER_COLOR = Colors.DARK_YELLOW;
-	private static final Color LIVE_COLOR   = Color.RED;
-	private static final Color DEAD_COLOR   = Colors.LIGHT_YELLOW;
 	private static final Color BLOCK_COLOR  = Colors.LIGHT_ORANGE;
 	private static final Color ACTIVE_COLOR = Color.BLUE;
 	private static final int   BLOCK_SIZE   = 8;
@@ -52,6 +59,10 @@ public class UniversePanel extends JPanel implements BoardListener
 	private final BoardView board;
 	private final int       blocksPerSide;
 	private CellClickListener clickListener = (row, col) -> {};
+
+	/** How long each live cell has been alive, kept for every coloring. */
+	private final CellAges ages;
+	private CellColoring coloring = new ClassicColoring();
 
 	/** The board as last drawn, or null when it must be drawn in full. */
 	private BufferedImage canvas;
@@ -83,12 +94,26 @@ public class UniversePanel extends JPanel implements BoardListener
 					clickListener.cellClicked(row, col);
 			}
 		});
+		ages = new CellAges(board);
 		board.addListener(this);
 	}
 
 	public void setCellClickListener(CellClickListener listener)
 	{
 		clickListener = listener;
+	}
+
+	/** Changes how cells are colored and redraws the whole board. */
+	public void setColoring(CellColoring coloring)
+	{
+		this.coloring = Objects.requireNonNull(coloring, "coloring");
+		canvas = null;                  // draw everything on the next paint
+		repaint();
+	}
+
+	public CellColoring coloring()
+	{
+		return coloring;
 	}
 
 	/** Pixel size of one cell: the largest whole number that fits. */
@@ -107,19 +132,28 @@ public class UniversePanel extends JPanel implements BoardListener
 
 	// ---- BoardListener ----
 
-	/** Cells that changed are redrawn. Blocks with a change get a blue
+	/** Cells that changed are redrawn, and so are cells that reached an
+	 *  age at which their color changes. Blocks with a change get a blue
 	 *  border; blocks that had one and are now quiet are redrawn without it.
 	 */
 	@Override public void stepped(long generation, Set<Coord> changed)
 	{
 		requireEventDispatchThread("stepped");
-		update(changed, blocksOf(changed), !changed.isEmpty());
+		ages.stepped(generation, changed);
+		Set<Coord> redraw = changed;
+		long[] colorChanges = coloring.colorChangesAt();
+		if (colorChanges.length > 0)
+		{	redraw = new HashSet<>(changed);
+			redraw.addAll(ages.reached(colorChanges));
+		}
+		update(redraw, blocksOf(changed), !changed.isEmpty());
 	}
 
 	/** An edit marks its blocks active, as a click did in the original. */
 	@Override public void edited(BoardEdit applied)
 	{
 		requireEventDispatchThread("edited");
+		ages.edited(applied);
 		Set<Integer> active = new HashSet<>(activeBlocks);
 		active.addAll(blocksOf(applied.cells().keySet()));
 		update(applied.cells().keySet(), active, true);
@@ -128,6 +162,7 @@ public class UniversePanel extends JPanel implements BoardListener
 	@Override public void reset()
 	{
 		requireEventDispatchThread("reset");
+		ages.reset(board);
 		activeBlocks = new HashSet<>();
 		boardActive  = false;
 		canvas       = null;            // draw everything on the next paint
@@ -233,7 +268,7 @@ public class UniversePanel extends JPanel implements BoardListener
 	private void paintCell(Graphics2D g, int row, int col)
 	{
 		int px = canvasPixels;
-		g.setColor(board.isAlive(row, col) ? LIVE_COLOR : DEAD_COLOR);
+		g.setColor(board.isAlive(row, col) ? coloring.live(ages.age(row, col)) : coloring.dead());
 		g.fillRect(col * px + 1, row * px + 1, px - 1, px - 1);
 	}
 

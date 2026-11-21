@@ -118,6 +118,71 @@ class ScreenFitTest
 						 "corner " + corner);
 	}
 
+	/** 목적: 공간이 아무리 좁아도 셀이 0픽셀이 되어 보드가 사라지지 않는지 확인.
+	 *  방법: 보드보다 좁은 공간, 0픽셀 공간을 준다.
+	 *  기대: 셀 크기는 최소 1픽셀 (넘치는 부분은 스크롤이 맡는다).
+	 */
+	@Test @Tag("defect-fix")
+	@DisplayName("[결함 수정 D3] 공간이 보드보다 좁거나 0이어도 셀은 최소 1픽셀이다")
+	void cellIsNeverSmallerThanOnePixel()
+	{
+		assertEquals(1, ScreenFit.cellSize(1000, 8, 500));
+		assertEquals(1, ScreenFit.cellSize(64, 8, 63));
+		assertEquals(1, ScreenFit.cellSize(64, 8, 0));
+		assertEquals(2, ScreenFit.cellSize(64, 8, 191));   // 191 / 64 = 2.98 -> 2 (fits, never overflows)
+	}
+
+	/** 목적: "들어가면 패널 그대로, 넘치면 스크롤"의 경계가 정확한지 확인.
+	 *  방법: 512×512 패널(64칸 × 8픽셀)을 딱 맞는 공간, 세로만 1픽셀 모자란 공간,
+	 *  가로만 1픽셀 모자란 공간에 각각 맞춘다.
+	 *  기대: 딱 맞으면 패널 그대로, 어느 한쪽이라도 1픽셀 모자라면 스크롤 창.
+	 */
+	@Test @Tag("defect-fix")
+	@DisplayName("[결함 수정 D3] 딱 맞으면 패널 그대로, 가로나 세로가 1픽셀이라도 넘치면 스크롤 창")
+	void scrollsExactlyWhenTheBoardOverflows()
+	{
+		UniversePanel panel = new UniversePanel(ReadOnlyBoardView.of(LifeModel.builder().build()), 8);
+		assertEquals(new Dimension(512, 512), panel.getPreferredSize());
+
+		assertSame(panel, ScreenFit.fit(panel, 8, new Dimension(512, 512)));
+		assertInstanceOf(JScrollPane.class, ScreenFit.fit(panel, 8, new Dimension(512, 511)));
+		assertInstanceOf(JScrollPane.class, ScreenFit.fit(panel, 8, new Dimension(511, 512)));
+	}
+
+	/** 목적: 스크롤 창 안의 큰 보드가 스크롤 창 크기로 눌려 찌그러지지 않고, 스크롤하면
+	 *  끝까지 볼 수 있으며, 화살표 한 번에 셀 하나씩 움직이는지 확인.
+	 *  방법: 1024×1024 보드를 노트북 크기 스크롤 창에 넣고 배치(layout)한 뒤,
+	 *  오른쪽 아래 끝으로 스크롤하고 맨 끝 셀을 클릭한다.
+	 *  기대: 패널은 1024×1024 그대로, 보이는 영역에 맨 끝 셀이 들어오고, 클릭은 (1023, 1023)에 닿는다.
+	 *  스크롤 단위는 셀 크기(1픽셀)와 같다.
+	 */
+	@Test @Tag("defect-fix")
+	@DisplayName("[결함 수정 D3] 스크롤 창 안의 큰 보드는 눌리지 않고, 끝까지 스크롤해 맨 끝 셀을 누를 수 있다")
+	void scrolledBoardKeepsItsSizeAndReachesTheLastCell()
+	{
+		int cell = ScreenFit.cellSize(1024, 8, Math.min(LAPTOP.width, LAPTOP.height));
+		UniversePanel panel = new UniversePanel(ReadOnlyBoardView.of(LifeModel.builder().size(1024).build()), cell);
+		JScrollPane scroll = (JScrollPane) ScreenFit.fit(panel, cell, LAPTOP);
+		assertEquals(cell, scroll.getVerticalScrollBar().getUnitIncrement());
+		assertEquals(cell, scroll.getHorizontalScrollBar().getUnitIncrement());
+
+		scroll.setSize(scroll.getPreferredSize());
+		scroll.doLayout();
+		scroll.getViewport().doLayout();
+		assertEquals(new Dimension(1024, 1024), panel.getSize());
+
+		JViewport viewport = scroll.getViewport();
+		Dimension extent = viewport.getExtentSize();
+		viewport.setViewPosition(new Point(1024 - extent.width, 1024 - extent.height));
+		assertTrue(viewport.getViewRect().contains(1023, 1023), viewport.getViewRect().toString());
+
+		List<Coord> clicked = new ArrayList<>();
+		panel.setCellClickListener((row, col) -> clicked.add(new Coord(row, col)));
+		panel.dispatchEvent(new MouseEvent(panel, MouseEvent.MOUSE_PRESSED, 0, 0, 1023, 1023,
+										   1, false, MouseEvent.BUTTON1));
+		assertEquals(List.of(new Coord(1023, 1023)), clicked);
+	}
+
 	/** 목적: 잘못된 입력을 조용히 넘기지 않는지 확인.
 	 *  기대: 보드 크기나 셀 크기가 0 이하면 IllegalArgumentException.
 	 */

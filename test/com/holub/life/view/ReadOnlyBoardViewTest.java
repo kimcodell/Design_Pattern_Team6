@@ -97,6 +97,43 @@ class ReadOnlyBoardViewTest
 		assertSame(once, ReadOnlyBoardView.of(once));
 	}
 
+	/** 목적: 잘못된 입력을 조용히 넘기지 않는지 확인.
+	 *  기대: null을 감싸려 하면 그 자리에서 NullPointerException (나중에 화면이 그릴 때가 아니라).
+	 */
+	@Test @Tag("design")
+	@DisplayName("[구조 D1] null 보드는 감쌀 수 없다")
+	void rejectsNull()
+	{
+		assertThrows(NullPointerException.class, () -> ReadOnlyBoardView.of(null));
+	}
+
+	/** 목적: Proxy로 쓰기 기능이 새어 나가지 않는지 확인. 누군가 Proxy에 편의 메서드
+	 *  (예: toggle)를 덧붙이거나, 상속해서 쓰기를 열면 읽기 전용 약속이 깨진다.
+	 *  방법: 리플렉션으로 Proxy의 공개 메서드를 모두 모아 BoardView의 메서드와 비교한다.
+	 *  기대: 클래스는 final이고, 공개 메서드는 BoardView 메서드와 정적 생성 메서드 of뿐이다.
+	 */
+	@Test @Tag("design")
+	@DisplayName("[구조 D1] Proxy는 상속할 수 없고, BoardView 읽기 메서드 말고는 공개 메서드가 없다")
+	void exposesOnlyBoardViewMethods()
+	{
+		assertTrue(java.lang.reflect.Modifier.isFinal(ReadOnlyBoardView.class.getModifiers()));
+
+		Set<String> allowed = new TreeSet<>();
+		for (java.lang.reflect.Method method : BoardView.class.getMethods())
+			allowed.add(method.getName());
+		Set<String> extra = new TreeSet<>();
+		for (java.lang.reflect.Method method : ReadOnlyBoardView.class.getDeclaredMethods())
+		{
+			int modifiers = method.getModifiers();
+			if (!java.lang.reflect.Modifier.isPublic(modifiers))
+				continue;
+			boolean factory = method.getName().equals("of") && java.lang.reflect.Modifier.isStatic(modifiers);
+			if (!factory && !allowed.contains(method.getName()))
+				extra.add(method.getName());
+		}
+		assertEquals(Set.of(), extra, "public methods beyond BoardView");
+	}
+
 	/** 목적: 패널에 실제 보드 대신 Proxy를 줘도 화면이 똑같은지 확인
 	 *  (기존 화면 기능 유지, 바뀐 곳만 그리기 포함).
 	 *  방법: 같은 보드에 패널 두 개를 단다. 하나는 보드를 직접, 하나는 Proxy로 받는다.
@@ -124,6 +161,47 @@ class ReadOnlyBoardViewTest
 			model.step();
 			assertSamePixels(render(direct), render(proxied), "generation " + generation);
 		}
+	}
+
+	/** 목적: 보드 전체가 바뀌는 경우(지우기, 불러오기)에도 Proxy를 거친 화면이 맞는지 확인.
+	 *  이때 패널은 바뀐 셀만 그리지 않고 전체를 다시 그리므로 위 테스트와 다른 경로다.
+	 *  방법: 글라이더를 진행하다 지우고, 저장해 둔 상태를 불러오기를 세 번 되풀이하며
+	 *  매번 직접 받은 패널과 Proxy 패널을 픽셀 단위로 비교한다.
+	 *  기대: 모든 픽셀이 같고, 지운 직후에는 Proxy 화면에 산 셀(빨강)이 하나도 없다.
+	 */
+	@Test @Tag("existing")
+	@DisplayName("[기존 기능] 지우기·불러오기 뒤에도 Proxy 화면이 직접 준 것과 픽셀 단위로 같다")
+	void panelRedrawsTheSameAfterResetThroughTheProxy()
+	{
+		LifeModel model = LifeModel.builder().build();
+		model.apply(BoardEdit.set(GLIDER, true));
+		BoardSnapshot saved = model.snapshot();
+		UniversePanel direct  = panel(model);
+		UniversePanel proxied = panel(ReadOnlyBoardView.of(model));
+
+		for (int round = 0; round < 3; ++round)
+		{
+			model.step();
+			model.step();
+			assertSamePixels(render(direct), render(proxied), "round " + round + " after steps");
+
+			model.clear();
+			BufferedImage cleared = render(proxied);
+			assertSamePixels(render(direct), cleared, "round " + round + " after clear");
+			assertFalse(hasRed(cleared), "round " + round + ": live cell left after clear");
+
+			model.restore(saved);
+			assertSamePixels(render(direct), render(proxied), "round " + round + " after restore");
+		}
+	}
+
+	private static boolean hasRed(BufferedImage image)
+	{
+		for (int y = 0; y < image.getHeight(); ++y)
+			for (int x = 0; x < image.getWidth(); ++x)
+				if ((image.getRGB(x, y) & 0xffffff) == 0xff0000)
+					return true;
+		return false;
 	}
 
 	private static UniversePanel panel(BoardView board)

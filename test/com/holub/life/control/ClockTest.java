@@ -4,6 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
+import javax.swing.JMenu;
+import javax.swing.MenuElement;
+import javax.swing.MenuSelectionManager;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.*;
 
@@ -55,5 +58,53 @@ class ClockTest
 			clock.stop();
 		}
 		assertEquals(0, offEdt.get(), "every tick must arrive on the event-dispatch thread");
+	}
+
+	/** 목적: 정지 상태에서 한 세대만 진행하고 계속 정지하는지 확인. */
+	@Test @Tag("defect-fix")
+	@DisplayName("정지 상태에서 한 세대 진행을 누르면 한 틱만 발생한다")
+	void stepsOnceWhenStopped() throws Exception
+	{
+		SwingUtilities.invokeAndWait(() ->
+		{
+			Clock clock = new Clock();
+			AtomicInteger ticks = new AtomicInteger();
+			clock.addClockListener(ticks::incrementAndGet);
+
+			clock.stepOnce();
+
+			assertEquals(1, ticks.get());
+			assertFalse(clock.isRunning());
+		});
+	}
+
+	/** 목적: 메뉴가 선택된 상태에서도 수동 틱은 진행되고 자동 실행은 멈추는지 확인. */
+	@Test @Tag("defect-fix")
+	@DisplayName("자동 실행 중 한 세대 진행을 누르면 한 틱 진행 후 정지한다")
+	void stepsOnceAndStopsAutomaticTicks() throws Exception
+	{
+		Clock clock = new Clock();
+		AtomicInteger ticks = new AtomicInteger();
+		SwingUtilities.invokeAndWait(() ->
+		{
+			clock.addClockListener(ticks::incrementAndGet);
+			MenuSelectionManager menuSelection = MenuSelectionManager.defaultManager();
+			clock.startTicking(30);
+			try
+			{
+				assertTrue(clock.isRunning());
+				menuSelection.setSelectedPath(new MenuElement[] {new JMenu("Go")});
+
+				clock.stepOnce();
+
+				assertEquals(1, ticks.get());
+				assertFalse(clock.isRunning());
+			}
+			finally
+			{
+				menuSelection.clearSelectedPath();
+				clock.stop();
+			}
+		});
 	}
 }

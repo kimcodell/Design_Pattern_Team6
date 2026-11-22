@@ -21,6 +21,12 @@ import com.holub.life.model.*;
  *  board is drawn only when the panel is first shown, when the cell
  *  size changes, and after {@link #reset()}.
  *
+ *  <p>A cell smaller than {@value #MIN_PIXELS_FOR_LINES} pixels (a big
+ *  board shrunk by {@link ScreenFit}, or a small window) leaves no room
+ *  for lines: each cell then fills its whole square, and no grid lines,
+ *  block lines or blue borders are drawn. Every pixel then belongs to
+ *  exactly one cell, so redrawing a cell leaves nothing stale behind.
+ *
  *  <p><b>Threads.</b> Like every Swing component, the panel must be used
  *  on the event-dispatch thread (EDT), and so must the board it shows:
  *  the board's notifications ({@link #stepped}, {@link #edited},
@@ -29,6 +35,15 @@ import com.holub.life.model.*;
  *  the meantime. A notification that arrives on another thread is a
  *  programming error and throws {@link IllegalStateException} at once,
  *  instead of corrupting the picture now and then.
+ *
+ *  <p><b>Colors.</b> How cells are colored is a {@link CellColoring}
+ *  (Strategy), the original red by default ({@link ClassicColoring}). The
+ *  panel keeps track of how long each live cell has been alive
+ *  ({@link CellAges}) whatever the coloring, so switching to a coloring
+ *  that depends on age ({@link AgeColoring}) shows the real ages at once.
+ *  When a cell reaches an age at which its color changes, it is redrawn
+ *  like a changed cell, but its block does not get a blue border: nothing
+ *  was computed there.
  *
  *  <p>Give the panel a read-only board ({@link ReadOnlyBoardView#of}): the
  *  panel only reads it, and clicks go out through
@@ -43,15 +58,19 @@ public class UniversePanel extends JPanel implements BoardListener
 	}
 
 	private static final Color BORDER_COLOR = Colors.DARK_YELLOW;
-	private static final Color LIVE_COLOR   = Color.RED;
-	private static final Color DEAD_COLOR   = Colors.LIGHT_YELLOW;
 	private static final Color BLOCK_COLOR  = Colors.LIGHT_ORANGE;
 	private static final Color ACTIVE_COLOR = Color.BLUE;
 	private static final int   BLOCK_SIZE   = 8;
+	/** Smallest cell, in pixels, drawn with lines and borders around it. */
+	static final int MIN_PIXELS_FOR_LINES = 3;
 
 	private final BoardView board;
 	private final int       blocksPerSide;
 	private CellClickListener clickListener = (row, col) -> {};
+
+	/** How long each live cell has been alive, kept for every coloring. */
+	private final CellAges ages;
+	private CellColoring coloring = new ClassicColoring();
 
 	/** The board as last drawn, or null when it must be drawn in full. */
 	private BufferedImage canvas;
@@ -83,12 +102,26 @@ public class UniversePanel extends JPanel implements BoardListener
 					clickListener.cellClicked(row, col);
 			}
 		});
+		ages = new CellAges(board);
 		board.addListener(this);
 	}
 
 	public void setCellClickListener(CellClickListener listener)
 	{
 		clickListener = listener;
+	}
+
+	/** Changes how cells are colored and redraws the whole board. */
+	public void setColoring(CellColoring coloring)
+	{
+		this.coloring = Objects.requireNonNull(coloring, "coloring");
+		canvas = null;                  // draw everything on the next paint
+		repaint();
+	}
+
+	public CellColoring coloring()
+	{
+		return coloring;
 	}
 
 	/** Pixel size of one cell: the largest whole number that fits. */
@@ -107,19 +140,28 @@ public class UniversePanel extends JPanel implements BoardListener
 
 	// ---- BoardListener ----
 
-	/** Cells that changed are redrawn. Blocks with a change get a blue
+	/** Cells that changed are redrawn, and so are cells that reached an
+	 *  age at which their color changes. Blocks with a change get a blue
 	 *  border; blocks that had one and are now quiet are redrawn without it.
 	 */
 	@Override public void stepped(long generation, Set<Coord> changed)
 	{
 		requireEventDispatchThread("stepped");
-		update(changed, blocksOf(changed), !changed.isEmpty());
+		ages.stepped(generation, changed);
+		Set<Coord> redraw = changed;
+		long[] colorChanges = coloring.colorChangesAt();
+		if (colorChanges.length > 0)
+		{	redraw = new HashSet<>(changed);
+			redraw.addAll(ages.reached(colorChanges));
+		}
+		update(redraw, blocksOf(changed), !changed.isEmpty());
 	}
 
 	/** An edit marks its blocks active, as a click did in the original. */
 	@Override public void edited(BoardEdit applied)
 	{
 		requireEventDispatchThread("edited");
+		ages.edited(applied);
 		Set<Integer> active = new HashSet<>(activeBlocks);
 		active.addAll(blocksOf(applied.cells().keySet()));
 		update(applied.cells().keySet(), active, true);
@@ -128,6 +170,7 @@ public class UniversePanel extends JPanel implements BoardListener
 	@Override public void reset()
 	{
 		requireEventDispatchThread("reset");
+		ages.reset(board);
 		activeBlocks = new HashSet<>();
 		boardActive  = false;
 		canvas       = null;            // draw everything on the next paint
@@ -183,15 +226,17 @@ public class UniversePanel extends JPanel implements BoardListener
 			{	paintBlock(g, block);
 				dirty = union(dirty, blockBounds(block));
 			}
-			for (int block : activeBlocks)  // cell fills may have covered the border
-			{	paintActiveBorder(g, block);
-				dirty = union(dirty, blockBounds(block));
+			if (linesFit())
+			{	for (int block : activeBlocks)  // cell fills may have covered the border
+				{	paintActiveBorder(g, block);
+					dirty = union(dirty, blockBounds(block));
+				}
+				if (boardTurnedOn)
+					dirty = union(dirty, new Rectangle(0, 0, canvas.getWidth(), canvas.getHeight()));
 			}
-			if (boardTurnedOn)
-				dirty = union(dirty, new Rectangle(0, 0, canvas.getWidth(), canvas.getHeight()));
 			if (dirty == null)
 				return;
-			if (boardActive)
+			if (boardActive && linesFit())
 			{	g.setClip(dirty);          // repair the board border where we drew
 				paintBoardBorder(g);
 			}
@@ -214,30 +259,46 @@ public class UniversePanel extends JPanel implements BoardListener
 			g.fillRect(0, 0, side, side);
 			for (int block = 0; block < blocksPerSide * blocksPerSide; ++block)
 				paintBlock(g, block);
-			for (int block : activeBlocks)
-				paintActiveBorder(g, block);
+			if (linesFit())
+			{	for (int block : activeBlocks)
+					paintActiveBorder(g, block);
 
-			int end = board.size() * canvasPixels;      // right and bottom edges
-			g.setColor(BLOCK_COLOR);
-			g.drawLine(end, 0, end, end);
-			g.drawLine(0, end, end, end);
+				int end = board.size() * canvasPixels;  // right and bottom edges
+				g.setColor(BLOCK_COLOR);
+				g.drawLine(end, 0, end, end);
+				g.drawLine(0, end, end, end);
 
-			if (boardActive)
-				paintBoardBorder(g);
+				if (boardActive)
+					paintBoardBorder(g);
+			}
 		}
 		finally
 		{	g.dispose();
 		}
 	}
 
+	/** Whether cells are big enough to draw lines and borders around them. */
+	private boolean linesFit()
+	{
+		return canvasPixels >= MIN_PIXELS_FOR_LINES;
+	}
+
+	/** The inside of the cell, leaving its top and left line; the whole
+	 *  square when there is no room for lines.
+	 */
 	private void paintCell(Graphics2D g, int row, int col)
 	{
 		int px = canvasPixels;
-		g.setColor(board.isAlive(row, col) ? LIVE_COLOR : DEAD_COLOR);
-		g.fillRect(col * px + 1, row * px + 1, px - 1, px - 1);
+		g.setColor(board.isAlive(row, col) ? coloring.live(ages.age(row, col)) : coloring.dead());
+		if (linesFit())
+			g.fillRect(col * px + 1, row * px + 1, px - 1, px - 1);
+		else
+			g.fillRect(col * px, row * px, px, px);
 	}
 
-	/** Cells, grid lines and the block outline, without the blue border. */
+	/** Cells, grid lines and the block outline, without the blue border
+	 *  (only the cells when there is no room for lines).
+	 */
 	private void paintBlock(Graphics2D g, int block)
 	{
 		int px = canvasPixels;
@@ -250,16 +311,15 @@ public class UniversePanel extends JPanel implements BoardListener
 			for (int col = firstCol; col < lastCol; ++col)
 				paintCell(g, row, col);
 
+		if (!linesFit())
+			return;
 		int top = firstRow * px, bottom = lastRow * px;
 		int left = firstCol * px, right = lastCol * px;
-		if (px >= 3)
-		{
-			g.setColor(BORDER_COLOR);
-			for (int row = firstRow + 1; row < lastRow; ++row)
-				g.drawLine(left, row * px, right - 1, row * px);
-			for (int col = firstCol + 1; col < lastCol; ++col)
-				g.drawLine(col * px, top, col * px, bottom - 1);
-		}
+		g.setColor(BORDER_COLOR);
+		for (int row = firstRow + 1; row < lastRow; ++row)
+			g.drawLine(left, row * px, right - 1, row * px);
+		for (int col = firstCol + 1; col < lastCol; ++col)
+			g.drawLine(col * px, top, col * px, bottom - 1);
 		g.setColor(BLOCK_COLOR);
 		g.drawLine(left, top, right - 1, top);
 		g.drawLine(left, top, left, bottom - 1);

@@ -8,6 +8,7 @@ import com.holub.life.storage.BoardFileIO;
 import com.holub.life.model.LifeModel;
 import com.holub.life.storage.format.JavaSerializationFormat;
 import com.holub.life.control.BoardFileActions;
+import com.holub.life.control.StampToolbar;
 import com.holub.life.control.Clock;
 import com.holub.life.control.ClockMenu;
 import com.holub.life.view.ColoringMenu;
@@ -72,7 +73,7 @@ public final class Life extends JFrame
 		int           cell  = ScreenFit.cellSize( model.size(), CELL_SIZE,
 												  Math.min( room.width, room.height ) );
 		UniversePanel panel = new UniversePanel( ReadOnlyBoardView.of( model ), cell );
-		panel.setCellClickListener( model::toggle );
+		StampToolbar tools = new StampToolbar(model, panel);
 		panel.addOverlay( outlines );
 
 		BoardFileIO files = new BoardFileIO(
@@ -89,6 +90,7 @@ public final class Life extends JFrame
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );
 		getContentPane().setLayout  ( new BorderLayout()    );
+		getContentPane().add(tools, BorderLayout.NORTH);
 		getContentPane().add( ScreenFit.fit( panel, cell, room ),
 							  BorderLayout.CENTER ); //{=life.java.install}
 		getContentPane().add( list, BorderLayout.EAST );

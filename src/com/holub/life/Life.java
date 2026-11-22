@@ -47,9 +47,9 @@ public final class Life extends JFrame
 	{   super( "The Game of Life. "
 					+"(c)2003 Allen I. Holub <http://www.holub.com>");
 
-		// Must establish the MenuSite very early in case
-		// a subcomponent puts menus on it.
-		MenuSite.establish( this );     //{=life.java.establish}
+		JMenuBar bar = new JMenuBar();
+		setJMenuBar(bar);
+		MenuSite menus = new MenuSite(bar);
 
 		LifeModel     model = LifeModel.builder().build();
 		Dimension     room  = ScreenFit.roomOnScreen();
@@ -65,9 +65,9 @@ public final class Life extends JFrame
 		clock.addClockListener( () -> model.step() );
 
 		BoardFileActions fileActions = new BoardFileActions( this, model, files, clock );
-		installGridMenu( model, fileActions );
-		ClockMenu.install( clock );
-		MenuSite.addLine( this, "Race", "Glider Race...", e -> showRace() );
+		installGridMenu( menus, model, fileActions );
+		ClockMenu.install( menus, clock );
+		menus.addLine( this, "Race", "Glider Race...", e -> showRace() );
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );
 		getContentPane().setLayout  ( new BorderLayout()    );
@@ -78,11 +78,11 @@ public final class Life extends JFrame
 		setVisible( true );
 	}
 
-	private void installGridMenu( LifeModel model, BoardFileActions fileActions )
+	private void installGridMenu( MenuSite menus, LifeModel model, BoardFileActions fileActions )
 	{
-		MenuSite.addLine( this, "Grid", "Clear", e -> model.clear() );
-		MenuSite.addLine( this, "Grid", "Load", e -> fileActions.load() );
-		MenuSite.addLine( this, "Grid", "Store", e -> fileActions.store() );
-		MenuSite.addLine( this, "Grid", "Exit", e -> System.exit(0) );
+		menus.addLine( this, "Grid", "Clear", e -> model.clear() );
+		menus.addLine( this, "Grid", "Load", e -> fileActions.load() );
+		menus.addLine( this, "Grid", "Store", e -> fileActions.store() );
+		menus.addLine( this, "Grid", "Exit", e -> dispatchEvent(new java.awt.event.WindowEvent(this, java.awt.event.WindowEvent.WINDOW_CLOSING)) );
 	}
 }

@@ -18,7 +18,7 @@ public final class ClockMenu
 {
 	private ClockMenu() {}
 
-	public static void install( final Clock clock )
+	public static void install( MenuSite menus, final Clock clock )
 	{
 		// First set up a single listener that will handle all the
 		// menu-selection events except "Exit"
@@ -40,16 +40,16 @@ public final class ClockMenu
 				}
 			};
 																	// {=midSetup}
-		MenuSite.addLine(clock,"Go","Status",           e -> {});
-		MenuSite.addLine(clock,"Go","Halt",             modifier);
-		MenuSite.addLine(clock,"Go","Tick (Single Step)",modifier);
-		MenuSite.addLine(clock,"Go","Agonizing",        modifier);
-		MenuSite.addLine(clock,"Go","Slow",             modifier);
-		MenuSite.addLine(clock,"Go","Medium",           modifier);
-		MenuSite.addLine(clock,"Go","Fast",             modifier); // {=endSetup}
+		menus.addLine(clock,"Go","Status",           e -> {});
+		menus.addLine(clock,"Go","Halt",             modifier);
+		menus.addLine(clock,"Go","Tick (Single Step)",modifier);
+		menus.addLine(clock,"Go","Agonizing",        modifier);
+		menus.addLine(clock,"Go","Slow",             modifier);
+		menus.addLine(clock,"Go","Medium",           modifier);
+		menus.addLine(clock,"Go","Fast",             modifier); // {=endSetup}
 
-		JMenu goMenu = (JMenu)MenuSite.getMyMenuItem(clock, "Go", null);
-		JMenuItem statusItem = MenuSite.getMyMenuItem(clock, "Go", "Status");
+		JMenu goMenu = (JMenu)menus.getMyMenuItem(clock, "Go", null);
+		JMenuItem statusItem = menus.getMyMenuItem(clock, "Go", "Status");
 		showStatusOnOpen(goMenu, statusItem, clock);
 	}
 

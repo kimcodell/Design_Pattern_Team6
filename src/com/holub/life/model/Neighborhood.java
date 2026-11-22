@@ -73,9 +73,11 @@ final class Neighborhood implements Cell
 
 	/** Figures the next state of the current neighborhood and the
 	 *  contained neigborhoods (or cells). Does not transition to the
-	 *  next state, however. Note that the neighboring cells are passed
-	 *  in as arguments rather than being stored internally---an
-	 *  example of the Flyweight pattern.
+	 *  next state, however. The neighboring cells are passed in as
+	 *  arguments rather than stored, so a block holds no references
+	 *  to its neighbors. (The original called this the Flyweight
+	 *  pattern; it is not: nothing is shared to save memory. It is
+	 *  plain parameter passing.)
 	 *
 	 *  @see #transition
 	 *  @param north		The neighbor to our north

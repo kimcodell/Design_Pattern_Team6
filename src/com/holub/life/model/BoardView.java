@@ -15,6 +15,24 @@ public interface BoardView
 
 	boolean isAlive(int row, int col);
 
+	/** The rule the board evolves by. Analyzers need it: a pattern
+	 *  catalog, for example, is only valid for the rule it was made for.
+	 *  The default, for views that have no rule of their own (a stored
+	 *  snapshot, a test double), is Conway's.
+	 */
+	default Rule rule()
+	{
+		return Rule.CONWAY;
+	}
+
+	/** What lies beyond the edge of the board. Defaults to DEAD, the
+	 *  original behavior.
+	 */
+	default Boundary boundary()
+	{
+		return Boundary.DEAD;
+	}
+
 	BoardSnapshot snapshot();
 
 	void addListener(BoardListener listener);

@@ -2,6 +2,7 @@ package com.holub.life.model;
 
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 /** The single entry point to the Life model (Facade). Everything
  *  outside this package uses the board only through this class or
@@ -102,12 +103,12 @@ public final class LifeModel implements BoardView
 		return generation;
 	}
 
-	public Rule rule()
+	@Override public Rule rule()
 	{
 		return rule;
 	}
 
-	public Boundary boundary()
+	@Override public Boundary boundary()
 	{
 		return boundary;
 	}
@@ -135,19 +136,28 @@ public final class LifeModel implements BoardView
 	public boolean step()
 	{
 		Cell n = boundary.neighborOf(outermost);
-		Set<Coord> changed = new HashSet<>();
 		outermost.figureNextState(n, n, n, n, n, n, n, n);
+
+		// Collect the changed cells only when someone will read them:
+		// building the set is most of the cost of notification.
+		boolean notify = !listeners.isEmpty();
+		Set<Coord> changed = notify ? new HashSet<>() : Set.of();
+		Consumer<Coord> sink = notify ? changed::add : coord -> {};
+		boolean anyChanged = false;
 		// Transition whenever there is something to do, including a
 		// generation in which nothing changed but old edge markers
 		// must be cleared (the original skipped it: N1).
 		if (outermost.needsTransition())
-			outermost.transition(0, 0, changed::add);
+			anyChanged = outermost.transition(0, 0, sink);
 		++generation;
 
-		Set<Coord> view = Collections.unmodifiableSet(changed);
-		for (BoardListener listener : listeners)
-			listener.stepped(generation, view);
-		return !changed.isEmpty();
+		if (notify)
+		{
+			Set<Coord> view = Collections.unmodifiableSet(changed);
+			for (BoardListener listener : listeners)
+				listener.stepped(generation, view);
+		}
+		return anyChanged;
 	}
 
 	/** Set several cells at once. Listeners get one notification with

@@ -21,6 +21,7 @@ import com.holub.life.race.RaceWindow;
 import com.holub.life.pattern.PatternAnalyzer;
 import com.holub.life.pattern.PatternCatalog;
 import com.holub.life.pattern.PatternMonitor;
+import com.holub.life.branch.BranchWindow;
 
 /*******************************************************************
  * An implemenation of Conway's Game of Life.
@@ -37,6 +38,7 @@ public final class Life extends JFrame
 {
 	private static final int CELL_SIZE = 10;
 	private RaceWindow raceWindow;
+	private BranchWindow branchWindow;
 
 	public static void main( String[] arguments )
 	{   SwingUtilities.invokeLater( Life::new );
@@ -87,6 +89,7 @@ public final class Life extends JFrame
 		ClockMenu.install( menus, clock );
 		ColoringMenu.install( menus, panel );
 		menus.addLine( this, "Race", "Glider Race...", e -> showRace() );
+		menus.addLine( this, "Bookmark", "북마크·분기 비교...", e -> showBranches(model) );
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );
 		getContentPane().setLayout  ( new BorderLayout()    );
@@ -97,6 +100,14 @@ public final class Life extends JFrame
 
 		pack();
 		setVisible( true );
+	}
+
+	private void showBranches(LifeModel model)
+	{
+		if (branchWindow == null || !branchWindow.isDisplayable())
+			branchWindow = new BranchWindow(this, model);
+		branchWindow.setVisible(true);
+		branchWindow.toFront();
 	}
 
 	private void installGridMenu( MenuSite menus, LifeModel model, BoardFileActions fileActions )

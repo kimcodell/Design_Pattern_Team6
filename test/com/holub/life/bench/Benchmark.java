@@ -3,6 +3,7 @@ package com.holub.life.bench;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
 import java.util.*;
+import javax.swing.SwingUtilities;
 import com.holub.life.model.*;
 import com.holub.life.view.UniversePanel;
 
@@ -24,9 +25,16 @@ public final class Benchmark
 {
 	private static final int WARM_UP = 30, GENERATIONS = 50;
 
-	public static void main(String[] args)
+	public static void main(String[] args) throws Exception
 	{
 		double density = args.length > 0 ? Double.parseDouble(args[0]) : 0.3;
+		// The panel accepts board notifications only on the event-dispatch
+		// thread, as in the application, so measure there.
+		SwingUtilities.invokeAndWait(() -> run(density));
+	}
+
+	private static void run(double density)
+	{
 		System.out.printf("density %.0f%%, %d generations after %d warm-up generations (ms)%n",
 						  density * 100, GENERATIONS, WARM_UP);
 		System.out.println("   size     step  full paint  partial    copy   step+partial+copy");

@@ -10,6 +10,8 @@ import com.holub.life.storage.format.JavaSerializationFormat;
 import com.holub.life.control.BoardFileActions;
 import com.holub.life.control.Clock;
 import com.holub.life.control.ClockMenu;
+import com.holub.life.view.ReadOnlyBoardView;
+import com.holub.life.view.ScreenFit;
 import com.holub.life.view.UniversePanel;
 
 /*******************************************************************
@@ -40,7 +42,10 @@ public final class Life extends JFrame
 		MenuSite.establish( this );     //{=life.java.establish}
 
 		LifeModel     model = LifeModel.builder().build();
-		UniversePanel panel = new UniversePanel( model, CELL_SIZE );
+		Dimension     room  = ScreenFit.roomOnScreen();
+		int           cell  = ScreenFit.cellSize( model.size(), CELL_SIZE,
+												  Math.min( room.width, room.height ) );
+		UniversePanel panel = new UniversePanel( ReadOnlyBoardView.of( model ), cell );
 		panel.setCellClickListener( model::toggle );
 
 		BoardFileIO files = new BoardFileIO(
@@ -55,7 +60,8 @@ public final class Life extends JFrame
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );
 		getContentPane().setLayout  ( new BorderLayout()    );
-		getContentPane().add( panel, BorderLayout.CENTER ); //{=life.java.install}
+		getContentPane().add( ScreenFit.fit( panel, cell, room ),
+							  BorderLayout.CENTER ); //{=life.java.install}
 
 		pack();
 		setVisible( true );

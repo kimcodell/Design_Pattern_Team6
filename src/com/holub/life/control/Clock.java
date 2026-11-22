@@ -54,6 +54,20 @@ public class Clock
 	{	startTicking( 0 );
 	}
 
+	boolean isRunning()
+	{	return clock.isRunning();
+	}
+
+	int getTickDelay()
+	{	return clock.getDelay();
+	}
+
+	/** Stop automatic ticks and advance exactly one generation. */
+	void stepOnce()
+	{	stop();
+		publishTick();
+	}
+
 	private Publisher publisher = new Publisher();
 
 	/** Add a listener that's notified every time the clock ticks:
@@ -78,19 +92,14 @@ public class Clock
 	{	void tick();
 	}
 
-	/** Force the clock to "tick," even if it's not time for
-	 *  a tick. Useful for forcing a tick when the clock is
-	 *  stopped. (Life uses this for single stepping.)
-	 */
+	/** Advance one tick unless a menu is open. */
 	public void tick()
-	{	publisher.publish
-		(	new Publisher.Distributor()
-			{	public void deliverTo( Object subscriber )
-				{	if( !menuIsActive() )
-						((Listener)subscriber).tick();
-				}
-			}
-		);
+	{	if( !menuIsActive() )
+			publishTick();
+	}
+
+	private void publishTick()
+	{	publisher.publish( subscriber -> ((Listener)subscriber).tick() );
 	}
 
 	/** Check if any item on the menu bar has been selected.

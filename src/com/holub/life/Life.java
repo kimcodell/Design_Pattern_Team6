@@ -13,6 +13,7 @@ import com.holub.life.control.ClockMenu;
 import com.holub.life.view.ReadOnlyBoardView;
 import com.holub.life.view.ScreenFit;
 import com.holub.life.view.UniversePanel;
+import com.holub.life.race.RaceWindow;
 
 /*******************************************************************
  * An implemenation of Conway's Game of Life.
@@ -28,9 +29,18 @@ import com.holub.life.view.UniversePanel;
 public final class Life extends JFrame
 {
 	private static final int CELL_SIZE = 8;
+	private RaceWindow raceWindow;
 
 	public static void main( String[] arguments )
 	{   SwingUtilities.invokeLater( Life::new );
+	}
+
+	private void showRace()
+	{
+		if (raceWindow == null)
+			raceWindow = new RaceWindow(this);
+		raceWindow.setVisible(true);
+		raceWindow.toFront();
 	}
 
 	private Life()
@@ -57,6 +67,7 @@ public final class Life extends JFrame
 		BoardFileActions fileActions = new BoardFileActions( this, model, files, clock );
 		installGridMenu( model, fileActions );
 		ClockMenu.install( clock );
+		MenuSite.addLine( this, "Race", "Glider Race...", e -> showRace() );
 
 		setDefaultCloseOperation    ( EXIT_ON_CLOSE         );
 		getContentPane().setLayout  ( new BorderLayout()    );

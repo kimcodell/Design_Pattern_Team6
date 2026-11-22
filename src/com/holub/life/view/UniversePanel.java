@@ -20,21 +20,8 @@ import com.holub.life.model.*;
  *  border (the original's <code>oneLastRefreshRequired</code>). The whole
  *  board is drawn only when the panel is first shown, when the cell
  *  size changes, and after {@link #reset()}.
- *
- *  <p><b>Threads.</b> Like every Swing component, the panel must be used
- *  on the event-dispatch thread (EDT), and so must the board it shows:
- *  the board's notifications ({@link #stepped}, {@link #edited},
- *  {@link #reset()}) carry only the changed cells, and the panel reads the
- *  rest from the board while drawing, so the board must not move on in
- *  the meantime. A notification that arrives on another thread is a
- *  programming error and throws {@link IllegalStateException} at once,
- *  instead of corrupting the picture now and then.
- *
- *  <p>Give the panel a read-only board ({@link ReadOnlyBoardView#of}): the
- *  panel only reads it, and clicks go out through
- *  {@link #setCellClickListener}.
  */
-public class UniversePanel extends JPanel implements BoardListener
+public class UniversePanel extends JPanel implements BoardListener, Scrollable
 {
 	/** Receives clicks translated to board cells. */
 	public interface CellClickListener
@@ -48,6 +35,7 @@ public class UniversePanel extends JPanel implements BoardListener
 	private static final Color BLOCK_COLOR  = Colors.LIGHT_ORANGE;
 	private static final Color ACTIVE_COLOR = Color.BLUE;
 	private static final int   BLOCK_SIZE   = 8;
+	private static final int   MAX_VIEWPORT_SIZE = 640;
 
 	private final BoardView board;
 	private final int       blocksPerSide;
@@ -69,7 +57,6 @@ public class UniversePanel extends JPanel implements BoardListener
 		this.blocksPerSide = (board.size() + BLOCK_SIZE - 1) / BLOCK_SIZE;
 		Dimension preferred = new Dimension(board.size() * cellSize, board.size() * cellSize);
 		setPreferredSize(preferred);
-		setMinimumSize(preferred);
 		setBackground(Color.white);
 		setOpaque(true);
 
@@ -90,6 +77,31 @@ public class UniversePanel extends JPanel implements BoardListener
 	{
 		clickListener = listener;
 	}
+
+	/** Keep large boards at a useful cell size and let a scroll pane expose
+	 *  the rest, instead of shrinking the cells to one pixel or packing a
+	 *  window larger than the screen.
+	 */
+	@Override public Dimension getPreferredScrollableViewportSize()
+	{
+		Dimension preferred = getPreferredSize();
+		return new Dimension(Math.min(preferred.width, MAX_VIEWPORT_SIZE),
+							 Math.min(preferred.height, MAX_VIEWPORT_SIZE));
+	}
+
+	@Override public int getScrollableUnitIncrement(Rectangle visibleRect, int orientation, int direction)
+	{
+		return Math.max(1, canvasPixels == 0 ? 8 : canvasPixels);
+	}
+
+	@Override public int getScrollableBlockIncrement(Rectangle visibleRect, int orientation, int direction)
+	{
+		int extent = orientation == SwingConstants.HORIZONTAL ? visibleRect.width : visibleRect.height;
+		return Math.max(1, extent - getScrollableUnitIncrement(visibleRect, orientation, direction));
+	}
+
+	@Override public boolean getScrollableTracksViewportWidth() { return false; }
+	@Override public boolean getScrollableTracksViewportHeight() { return false; }
 
 	/** Pixel size of one cell: the largest whole number that fits. */
 	private int cellPixels()
@@ -112,14 +124,12 @@ public class UniversePanel extends JPanel implements BoardListener
 	 */
 	@Override public void stepped(long generation, Set<Coord> changed)
 	{
-		requireEventDispatchThread("stepped");
 		update(changed, blocksOf(changed), !changed.isEmpty());
 	}
 
 	/** An edit marks its blocks active, as a click did in the original. */
 	@Override public void edited(BoardEdit applied)
 	{
-		requireEventDispatchThread("edited");
 		Set<Integer> active = new HashSet<>(activeBlocks);
 		active.addAll(blocksOf(applied.cells().keySet()));
 		update(applied.cells().keySet(), active, true);
@@ -127,20 +137,10 @@ public class UniversePanel extends JPanel implements BoardListener
 
 	@Override public void reset()
 	{
-		requireEventDispatchThread("reset");
 		activeBlocks = new HashSet<>();
 		boardActive  = false;
 		canvas       = null;            // draw everything on the next paint
 		repaint();
-	}
-
-	/** Fail fast when the board notifies from a thread other than the EDT. */
-	private static void requireEventDispatchThread(String notification)
-	{
-		if (!SwingUtilities.isEventDispatchThread())
-			throw new IllegalStateException("UniversePanel." + notification
-											+ "() called on thread \"" + Thread.currentThread().getName()
-											+ "\"; the board and its view must be used on the event-dispatch thread");
 	}
 
 	// ---- drawing ----

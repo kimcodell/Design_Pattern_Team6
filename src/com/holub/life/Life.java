@@ -73,7 +73,7 @@ public final class Life extends JFrame
 		int           cell  = ScreenFit.cellSize( model.size(), CELL_SIZE,
 												  Math.min( room.width, room.height ) );
 		UniversePanel panel = new UniversePanel( ReadOnlyBoardView.of( model ), cell );
-		StampToolbar tools = new StampToolbar(model, panel);
+		StampToolbar tools = new StampToolbar(model, panel, patterns.analyzer().catalog());
 		panel.addOverlay( outlines );
 
 		BoardFileIO files = new BoardFileIO(

@@ -11,10 +11,15 @@ import com.holub.life.control.BoardFileActions;
 import com.holub.life.control.Clock;
 import com.holub.life.control.ClockMenu;
 import com.holub.life.view.ColoringMenu;
+import com.holub.life.view.PatternOverlay;
+import com.holub.life.view.PatternPanel;
 import com.holub.life.view.ReadOnlyBoardView;
 import com.holub.life.view.ScreenFit;
 import com.holub.life.view.UniversePanel;
 import com.holub.life.race.RaceWindow;
+import com.holub.life.pattern.PatternAnalyzer;
+import com.holub.life.pattern.PatternCatalog;
+import com.holub.life.pattern.PatternMonitor;
 
 /*******************************************************************
  * An implemenation of Conway's Game of Life.
@@ -29,7 +34,7 @@ import com.holub.life.race.RaceWindow;
 
 public final class Life extends JFrame
 {
-	private static final int CELL_SIZE = 8;
+	private static final int CELL_SIZE = 10;
 	private RaceWindow raceWindow;
 
 	public static void main( String[] arguments )
@@ -53,11 +58,22 @@ public final class Life extends JFrame
 		MenuSite menus = new MenuSite(bar);
 
 		LifeModel     model = LifeModel.builder().build();
+
+		// Pattern analysis: outlines on the board and a list beside it.
+		PatternMonitor  patterns = new PatternMonitor( model,
+								new PatternAnalyzer( PatternCatalog.conway() ) );
+		PatternOverlay  outlines = new PatternOverlay( patterns );
+		PatternPanel    list     = new PatternPanel( patterns, outlines );
+
+		// The board gets the screen room left beside the pattern list.
 		Dimension     room  = ScreenFit.roomOnScreen();
+		room = new Dimension( Math.max( 1, room.width - list.getPreferredSize().width ),
+							  room.height );
 		int           cell  = ScreenFit.cellSize( model.size(), CELL_SIZE,
 												  Math.min( room.width, room.height ) );
 		UniversePanel panel = new UniversePanel( ReadOnlyBoardView.of( model ), cell );
 		panel.setCellClickListener( model::toggle );
+		panel.addOverlay( outlines );
 
 		BoardFileIO files = new BoardFileIO(
 						List.of( new JavaSerializationFormat( model.size() ) ) );
@@ -75,6 +91,7 @@ public final class Life extends JFrame
 		getContentPane().setLayout  ( new BorderLayout()    );
 		getContentPane().add( ScreenFit.fit( panel, cell, room ),
 							  BorderLayout.CENTER ); //{=life.java.install}
+		getContentPane().add( list, BorderLayout.EAST );
 
 		pack();
 		setVisible( true );

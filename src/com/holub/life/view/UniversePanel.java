@@ -67,6 +67,7 @@ public class UniversePanel extends JPanel implements BoardListener
 	private final BoardView board;
 	private final int       blocksPerSide;
 	private CellClickListener clickListener = (row, col) -> {};
+	private final java.util.List<BoardOverlay> overlays = new ArrayList<>();
 
 	/** How long each live cell has been alive, kept for every coloring. */
 	private final CellAges ages;
@@ -124,6 +125,14 @@ public class UniversePanel extends JPanel implements BoardListener
 		return coloring;
 	}
 
+	/** Draw the overlay over the board from now on. */
+	public void addOverlay(BoardOverlay overlay)
+	{
+		overlays.add(Objects.requireNonNull(overlay, "overlay"));
+		overlay.attach(this::repaint);
+		repaint();
+	}
+
 	/** Pixel size of one cell: the largest whole number that fits. */
 	private int cellPixels()
 	{
@@ -136,6 +145,15 @@ public class UniversePanel extends JPanel implements BoardListener
 		if (canvas == null || canvasPixels != cellPixels())
 			drawWholeBoard();
 		g.drawImage(canvas, 0, 0, null);
+		for (BoardOverlay overlay : overlays)
+		{	Graphics2D overlayGraphics = (Graphics2D) g.create();
+			try
+			{	overlay.paint(overlayGraphics, canvasPixels);
+			}
+			finally
+			{	overlayGraphics.dispose();
+			}
+		}
 	}
 
 	// ---- BoardListener ----
